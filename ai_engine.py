@@ -1,51 +1,66 @@
-from openai import OpenAI, RateLimitError
-from config import OPENAI_API_KEY
+import time
+
+from google import genai
+from google.genai.errors import APIError
+
+from config import GEMINI_API_KEY
+
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 5
 
 
 class AIEngineError(Exception):
+    """Raised when the AI engine fails to generate a summary."""
     pass
 
 
-def _get_client():
-    if not OPENAI_API_KEY:
-        raise AIEngineError(
-            "OpenAI API key is missing. Add OPENAI_API_KEY=your_key to the .env file."
-        )
-
-    return OpenAI(api_key=OPENAI_API_KEY)
-
-
 def summarize_text(text):
+
     if not text.strip():
-        return "No readable text was found in this PDF."
+        return "No text found."
 
     prompt = f"""
-    Summarize the following text in 5 bullet points:
+You are an expert summarization assistant.
 
-    {text}
-    """
+Summarize the following document.
 
-    client = _get_client()
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
-    except RateLimitError as e:
-        error_code = getattr(e, "code", None)
-        if error_code == "insufficient_quota":
-            raise AIEngineError(
-                "Your OpenAI API key is valid, but the account has no available API quota. "
-                "Add billing/credits on platform.openai.com or use another API key with quota."
-            ) from e
+Requirements:
+- Write a concise summary.
+- Mention the main idea.
+- Mention important facts.
+- Keep it easy to understand.
 
-        raise AIEngineError(
-            "OpenAI rate limit reached. Please wait a little and try again."
-        ) from e
+Document:
 
-    return response.choices[0].message.content
+{text}
+"""
+
+    last_error = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+
+        try:
+            response = client.models.generate_content(
+                model="gemini-flash-lite-latest",
+                contents=prompt
+            )
+            return response.text
+
+        except APIError as e:
+
+            last_error = e
+
+            is_overloaded = getattr(e, "code", None) == 503
+
+            if is_overloaded and attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY_SECONDS)
+                continue
+
+            raise AIEngineError(f"Gemini API error: {e}") from e
+
+        except Exception as e:
+            raise AIEngineError(f"Unexpected error: {e}") from e
+
+    raise AIEngineError(f"Gemini API error after {MAX_RETRIES} attempts: {last_error}")

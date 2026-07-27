@@ -1,3 +1,5 @@
+from database import init_db, save_generation
+from news_reader import extract_news
 from ai_engine import AIEngineError, summarize_text
 import streamlit as st
 from PyPDF2 import PdfReader
@@ -18,6 +20,7 @@ st.set_page_config(
 st.title("🤖 AI Creator Hub")
 st.markdown("---")
 
+init_db()
 # ======================================================
 # MODULE 1 : PDF TEXT EXTRACTION
 # ======================================================
@@ -66,6 +69,7 @@ if uploaded_file is not None:
                 st.write(e)
                 st.stop()
 
+            save_generation("pdf", uploaded_file.name, summary)
         st.subheader("📋 AI Summary")
 
         st.write(summary)
@@ -76,29 +80,62 @@ if uploaded_file is not None:
 
 st.markdown("---")
 
-st.header("📰 News Article Reader")
+st.header("📰 News Article AI Summarizer")
 
-news_url = st.text_input("Paste a News Article URL")
+news_url = st.text_input("Paste News Article URL")
 
 if news_url:
 
-    try:
-        response = requests.get(news_url)
+    if st.button("📥 Read News"):
 
-        if response.status_code == 200:
+        with st.spinner("Downloading article..."):
 
-            st.success("✅ Website downloaded successfully!")
+            title, article = extract_news(news_url)
 
-            st.write("Status Code:", response.status_code)
+        if title is None:
 
-            st.write("Downloaded HTML Size:", len(response.text), "characters")
+            st.error(article)
+            st.session_state.pop("news_title", None)
+            st.session_state.pop("news_article", None)
 
         else:
 
-            st.error(f"❌ Failed to download webpage. Status Code: {response.status_code}")
+            st.session_state["news_title"] = title
+            st.session_state["news_article"] = article
 
-    except Exception as e:
+    if "news_article" in st.session_state:
 
-        st.error("❌ An error occurred while connecting.")
+        st.success("Article downloaded successfully!")
 
-        st.write(e)
+        st.subheader("📰 Title")
+
+        st.write(st.session_state["news_title"])
+
+        st.subheader("📄 Article")
+
+        st.text_area(
+            "News Content",
+            st.session_state["news_article"],
+            height=300
+        )
+
+        if st.button("🤖 Summarize News"):
+
+            with st.spinner("AI is summarizing..."):
+
+                try:
+                    summary = summarize_text(st.session_state["news_article"])
+                except AIEngineError as e:
+                    st.error("Summary generation failed.")
+                    st.write(e)
+                    st.stop()
+                except Exception as e:
+                    st.error("Unexpected summary error.")
+                    st.write(e)
+                    st.stop()
+
+                save_generation("news", news_url, summary)
+
+            st.subheader("📋 AI Summary")
+
+            st.write(summary)
