@@ -1,3 +1,4 @@
+from youtube_reader import extract_youtube
 from database import init_db, save_generation
 from news_reader import extract_news
 from ai_engine import AIEngineError, summarize_text
@@ -135,6 +136,71 @@ if news_url:
                     st.stop()
 
                 save_generation("news", news_url, summary)
+
+            st.subheader("📋 AI Summary")
+
+            st.write(summary)
+# ======================================================
+# MODULE 3 : YOUTUBE VIDEO SUMMARIZER
+# ======================================================
+
+st.markdown("---")
+
+st.header("🎬 YouTube Video Summarizer")
+
+youtube_url = st.text_input("Paste YouTube Video URL")
+
+if youtube_url:
+
+    if st.button("📥 Fetch Transcript"):
+
+        with st.spinner("Fetching transcript..."):
+
+            video_id, transcript = extract_youtube(youtube_url)
+
+        if video_id is None:
+
+            st.error(transcript)
+            st.session_state.pop("yt_video_id", None)
+            st.session_state.pop("yt_transcript", None)
+
+        else:
+
+            st.session_state["yt_video_id"] = video_id
+            st.session_state["yt_transcript"] = transcript
+
+    if "yt_transcript" in st.session_state:
+
+        st.success("Transcript fetched successfully!")
+
+        st.subheader("🎬 Video ID")
+
+        st.write(st.session_state["yt_video_id"])
+
+        st.subheader("📄 Transcript")
+
+        st.text_area(
+            "Transcript Content",
+            st.session_state["yt_transcript"],
+            height=300
+        )
+
+        if st.button("🤖 Summarize Video"):
+
+            with st.spinner("AI is summarizing..."):
+
+                try:
+                    summary = summarize_text(st.session_state["yt_transcript"])
+                except AIEngineError as e:
+                    st.error("Summary generation failed.")
+                    st.write(e)
+                    st.stop()
+                except Exception as e:
+                    st.error("Unexpected summary error.")
+                    st.write(e)
+                    st.stop()
+
+                save_generation("youtube", youtube_url, summary)
 
             st.subheader("📋 AI Summary")
 
