@@ -64,3 +64,86 @@ Document:
             raise AIEngineError(f"Unexpected error: {e}") from e
 
     raise AIEngineError(f"Gemini API error after {MAX_RETRIES} attempts: {last_error}")
+TONE_INSTRUCTIONS = {
+    "High-energy / viral": (
+        "Write in a fast-paced, punchy, high-energy style typical of viral "
+        "short-form video. Use short sentences, bold claims, and urgency. "
+        "Sound like a creator hyping up their audience."
+    ),
+    "Informative / casual": (
+        "Write in a clear, friendly, conversational explainer tone. "
+        "Sound like a knowledgeable friend casually walking someone "
+        "through something interesting, without excessive hype."
+    ),
+    "Dramatic / storytelling": (
+        "Write with a dramatic, narrative-driven tone, building tension "
+        "and curiosity like a mini-story with a twist or reveal."
+    ),
+}
+
+
+def generate_shorts_script(text, tone):
+
+    if not text.strip():
+        return "No text found."
+
+    tone_instruction = TONE_INSTRUCTIONS.get(
+        tone, TONE_INSTRUCTIONS["Informative / casual"]
+    )
+
+    prompt = f"""
+You are an expert short-form video scriptwriter, writing scripts for
+YouTube Shorts, Instagram Reels, and TikTok.
+
+Tone instructions:
+{tone_instruction}
+
+Write a short-form video script based on the content below. Structure
+it into these exact four labeled sections:
+
+HOOK: A single, attention-grabbing opening line (under 15 words) that
+would stop someone from scrolling in the first 2 seconds. It should
+create curiosity or make a bold claim — not just state the topic.
+
+STORY: 3-5 short sentences delivering the core content in an engaging,
+easy-to-follow way. Simplify complex ideas. Keep sentences short —
+this will be spoken aloud in a fast-paced video.
+
+ENDING: 1-2 sentences that wrap up the point with a satisfying,
+memorable takeaway.
+
+CTA: A single short call-to-action line (e.g. asking viewers to
+follow, comment, or share) that fits naturally with the tone and
+topic — not generic or forced.
+
+Source content:
+
+{text}
+"""
+
+    last_error = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+
+        try:
+            response = client.models.generate_content(
+                model="gemini-flash-lite-latest",
+                contents=prompt
+            )
+            return response.text
+
+        except APIError as e:
+
+            last_error = e
+            is_overloaded = getattr(e, "code", None) == 503
+
+            if is_overloaded and attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY_SECONDS)
+                continue
+
+            raise AIEngineError(f"Gemini API error: {e}") from e
+
+        except Exception as e:
+            raise AIEngineError(f"Unexpected error: {e}") from e
+
+    raise AIEngineError(f"Gemini API error after {MAX_RETRIES} attempts: {last_error}")

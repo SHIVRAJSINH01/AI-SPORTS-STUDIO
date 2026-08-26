@@ -1,7 +1,7 @@
 from youtube_reader import extract_youtube
 from database import init_db, save_generation
 from news_reader import extract_news
-from ai_engine import AIEngineError, summarize_text
+from ai_engine import AIEngineError, summarize_text, generate_shorts_script, TONE_INSTRUCTIONS
 import streamlit as st
 from PyPDF2 import PdfReader
 import requests
@@ -46,6 +46,8 @@ if uploaded_file is not None:
 
         if extracted:
             text += extracted + "\n"
+
+    st.session_state["pdf_text"] = text 
 
     st.subheader("📖 Extracted Text")
 
@@ -205,3 +207,68 @@ if youtube_url:
             st.subheader("📋 AI Summary")
 
             st.write(summary)
+# ======================================================
+# MODULE 4 : AI SHORTS GENERATOR
+# ======================================================
+
+st.markdown("---")
+
+st.header("🎥 AI Shorts Script Generator")
+
+available_sources = {}
+
+if "news_article" in st.session_state:
+    available_sources["News Article"] = st.session_state["news_article"]
+
+if "yt_transcript" in st.session_state:
+    available_sources["YouTube Transcript"] = st.session_state["yt_transcript"]
+
+if "pdf_text" in st.session_state:
+    available_sources["PDF Content"] = st.session_state["pdf_text"]
+
+if not available_sources:
+
+    st.info(
+        "No content available yet. Fetch a PDF, News article, or "
+        "YouTube transcript above first, then come back here to "
+        "generate a Shorts script from it."
+    )
+
+else:
+
+    selected_source_label = st.selectbox(
+        "Choose a source to generate a script from",
+        list(available_sources.keys())
+    )
+
+    selected_tone = st.selectbox(
+        "Choose a tone",
+        list(TONE_INSTRUCTIONS.keys())
+    )
+
+    if st.button("🎬 Generate Shorts Script"):
+
+        source_text = available_sources[selected_source_label]
+
+        with st.spinner("Writing your script..."):
+
+            try:
+                script = generate_shorts_script(source_text, selected_tone)
+            except AIEngineError as e:
+                st.error("Script generation failed.")
+                st.write(e)
+                st.stop()
+            except Exception as e:
+                st.error("Unexpected error.")
+                st.write(e)
+                st.stop()
+
+            save_generation(
+                "shorts_script",
+                f"{selected_source_label} ({selected_tone})",
+                script
+            )
+
+        st.subheader("📝 Generated Script")
+
+        st.write(script)
