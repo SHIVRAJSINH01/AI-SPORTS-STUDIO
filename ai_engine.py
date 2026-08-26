@@ -7,13 +7,59 @@ from config import GEMINI_API_KEY
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-MAX_RETRIES = 3
+MAX_RETRIES_PER_MODEL = 2
 RETRY_DELAY_SECONDS = 5
+
+FALLBACK_MODELS = [
+    "gemini-flash-lite-latest",
+    "gemini-2.5-flash-lite",
+    "gemini-flash-latest",
+]
 
 
 class AIEngineError(Exception):
-    """Raised when the AI engine fails to generate a summary."""
+    """Raised when the AI engine fails to generate a response."""
     pass
+
+
+def _generate_with_fallback(prompt):
+    """
+    Tries each model in FALLBACK_MODELS in order. For each model,
+    retries a couple of times on transient 503 errors before moving
+    on to the next model in the list.
+    """
+
+    last_error = None
+
+    for model_name in FALLBACK_MODELS:
+
+        for attempt in range(1, MAX_RETRIES_PER_MODEL + 1):
+
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                return response.text
+
+            except APIError as e:
+
+                last_error = e
+                is_overloaded = getattr(e, "code", None) == 503
+
+                if is_overloaded and attempt < MAX_RETRIES_PER_MODEL:
+                    time.sleep(RETRY_DELAY_SECONDS)
+                    continue
+
+                break
+
+            except Exception as e:
+                last_error = e
+                break
+
+    raise AIEngineError(
+        f"All models failed. Last error: {last_error}"
+    )
 
 
 def summarize_text(text):
@@ -37,33 +83,9 @@ Document:
 {text}
 """
 
-    last_error = None
+    return _generate_with_fallback(prompt)
 
-    for attempt in range(1, MAX_RETRIES + 1):
 
-        try:
-            response = client.models.generate_content(
-                model="gemini-flash-lite-latest",
-                contents=prompt
-            )
-            return response.text
-
-        except APIError as e:
-
-            last_error = e
-
-            is_overloaded = getattr(e, "code", None) == 503
-
-            if is_overloaded and attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY_SECONDS)
-                continue
-
-            raise AIEngineError(f"Gemini API error: {e}") from e
-
-        except Exception as e:
-            raise AIEngineError(f"Unexpected error: {e}") from e
-
-    raise AIEngineError(f"Gemini API error after {MAX_RETRIES} attempts: {last_error}")
 TONE_INSTRUCTIONS = {
     "High-energy / viral": (
         "Write in a fast-paced, punchy, high-energy style typical of viral "
@@ -121,29 +143,4 @@ Source content:
 {text}
 """
 
-    last_error = None
-
-    for attempt in range(1, MAX_RETRIES + 1):
-
-        try:
-            response = client.models.generate_content(
-                model="gemini-flash-lite-latest",
-                contents=prompt
-            )
-            return response.text
-
-        except APIError as e:
-
-            last_error = e
-            is_overloaded = getattr(e, "code", None) == 503
-
-            if is_overloaded and attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY_SECONDS)
-                continue
-
-            raise AIEngineError(f"Gemini API error: {e}") from e
-
-        except Exception as e:
-            raise AIEngineError(f"Unexpected error: {e}") from e
-
-    raise AIEngineError(f"Gemini API error after {MAX_RETRIES} attempts: {last_error}")
+    return _generate_with_fallback(prompt)
