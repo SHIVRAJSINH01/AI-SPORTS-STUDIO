@@ -1,7 +1,10 @@
 from youtube_reader import extract_youtube
 from database import init_db, save_generation
 from news_reader import extract_news
-from ai_engine import AIEngineError, summarize_text, generate_shorts_script, TONE_INSTRUCTIONS
+from ai_engine import (
+    AIEngineError, summarize_text, generate_shorts_script,
+    TONE_INSTRUCTIONS, OUTPUT_LANGUAGES
+)
 import streamlit as st
 from PyPDF2 import PdfReader
 import requests
@@ -47,7 +50,7 @@ if uploaded_file is not None:
         if extracted:
             text += extracted + "\n"
 
-    st.session_state["pdf_text"] = text 
+    st.session_state["pdf_text"] = text
 
     st.subheader("📖 Extracted Text")
 
@@ -57,12 +60,18 @@ if uploaded_file is not None:
         height=400
     )
 
+    pdf_language = st.selectbox(
+        "Output language",
+        OUTPUT_LANGUAGES,
+        key="lang_pdf"
+    )
+
     if st.button("🤖 Summarize PDF"):
 
         with st.spinner("AI is reading the document..."):
 
             try:
-                summary = summarize_text(text)
+                summary = summarize_text(text, pdf_language)
             except AIEngineError as e:
                 st.error("Summary generation failed.")
                 st.write(e)
@@ -122,12 +131,20 @@ if news_url:
             height=300
         )
 
+        news_language = st.selectbox(
+            "Output language",
+            OUTPUT_LANGUAGES,
+            key="lang_news"
+        )
+
         if st.button("🤖 Summarize News"):
 
             with st.spinner("AI is summarizing..."):
 
                 try:
-                    summary = summarize_text(st.session_state["news_article"])
+                    summary = summarize_text(
+                        st.session_state["news_article"], news_language
+                    )
                 except AIEngineError as e:
                     st.error("Summary generation failed.")
                     st.write(e)
@@ -187,12 +204,20 @@ if youtube_url:
             height=300
         )
 
+        yt_language = st.selectbox(
+            "Output language",
+            OUTPUT_LANGUAGES,
+            key="lang_youtube"
+        )
+
         if st.button("🤖 Summarize Video"):
 
             with st.spinner("AI is summarizing..."):
 
                 try:
-                    summary = summarize_text(st.session_state["yt_transcript"])
+                    summary = summarize_text(
+                        st.session_state["yt_transcript"], yt_language
+                    )
                 except AIEngineError as e:
                     st.error("Summary generation failed.")
                     st.write(e)
@@ -246,6 +271,12 @@ else:
         list(TONE_INSTRUCTIONS.keys())
     )
 
+    shorts_language = st.selectbox(
+        "Output language",
+        OUTPUT_LANGUAGES,
+        key="lang_shorts"
+    )
+
     if st.button("🎬 Generate Shorts Script"):
 
         source_text = available_sources[selected_source_label]
@@ -253,7 +284,9 @@ else:
         with st.spinner("Writing your script..."):
 
             try:
-                script = generate_shorts_script(source_text, selected_tone)
+                script = generate_shorts_script(
+                    source_text, selected_tone, shorts_language
+                )
             except AIEngineError as e:
                 st.error("Script generation failed.")
                 st.write(e)
@@ -265,7 +298,7 @@ else:
 
             save_generation(
                 "shorts_script",
-                f"{selected_source_label} ({selected_tone})",
+                f"{selected_source_label} ({selected_tone}, {shorts_language})",
                 script
             )
 

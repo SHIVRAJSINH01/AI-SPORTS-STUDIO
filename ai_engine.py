@@ -16,6 +16,15 @@ FALLBACK_MODELS = [
     "gemini-flash-latest",
 ]
 
+OUTPUT_LANGUAGES = [
+    "English",
+    "Same as source",
+    "Hindi",
+    "Gujarati",
+    "Spanish",
+    "French",
+]
+
 
 class AIEngineError(Exception):
     """Raised when the AI engine fails to generate a response."""
@@ -62,13 +71,26 @@ def _generate_with_fallback(prompt):
     )
 
 
-def summarize_text(text):
+def _language_instruction(output_language, style="Respond"):
+    if output_language == "Same as source":
+        return f"{style} in the same language as the source content."
+    return (
+        f"{style} entirely in {output_language}, regardless of what "
+        f"language the source content is in."
+    )
+
+
+def summarize_text(text, output_language="English"):
 
     if not text.strip():
         return "No text found."
 
+    language_instruction = _language_instruction(output_language)
+
     prompt = f"""
 You are an expert summarization assistant.
+
+{language_instruction}
 
 Summarize the following document.
 
@@ -104,7 +126,7 @@ TONE_INSTRUCTIONS = {
 }
 
 
-def generate_shorts_script(text, tone):
+def generate_shorts_script(text, tone, output_language="English"):
 
     if not text.strip():
         return "No text found."
@@ -113,12 +135,17 @@ def generate_shorts_script(text, tone):
         tone, TONE_INSTRUCTIONS["Informative / casual"]
     )
 
+    language_instruction = _language_instruction(output_language, style="Write")
+
     prompt = f"""
 You are an expert short-form video scriptwriter, writing scripts for
 YouTube Shorts, Instagram Reels, and TikTok.
 
 Tone instructions:
 {tone_instruction}
+
+Language instructions:
+{language_instruction}
 
 Write a short-form video script based on the content below. Structure
 it into these exact four labeled sections:
