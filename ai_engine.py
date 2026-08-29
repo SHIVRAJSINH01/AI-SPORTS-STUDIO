@@ -171,3 +171,37 @@ Source content:
 """
 
     return _generate_with_fallback(prompt)
+
+
+def critique_output(original_text, generated_output, task_description):
+    """
+    Asks the AI to critique its own previously generated output,
+    flagging weaknesses so the user can judge quality or decide
+    to regenerate.
+    """
+
+    prompt = f"""
+You are a strict, honest content quality reviewer.
+
+Task that was performed:
+{task_description}
+
+Original source content (for context, truncated if long):
+{original_text[:2000]}
+
+Generated output to review:
+{generated_output}
+
+Critique the generated output. Be specific and honest, not
+flattering. Structure your critique as:
+
+STRENGTHS: 1-2 specific things done well.
+
+WEAKNESSES: 1-2 specific, actionable issues (e.g., unclear
+phrasing, missed key point, weak hook, generic CTA).
+
+VERDICT: One line — "Good as-is" or "Consider regenerating"
+with a one-sentence reason.
+"""
+
+    return _generate_with_fallback(prompt)

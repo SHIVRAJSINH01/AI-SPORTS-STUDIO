@@ -1,9 +1,10 @@
+from voiceover import generate_voiceover, VOICE_OPTIONS
 from youtube_reader import extract_youtube
 from database import init_db, save_generation
 from news_reader import extract_news
 from ai_engine import (
     AIEngineError, summarize_text, generate_shorts_script,
-    TONE_INSTRUCTIONS, OUTPUT_LANGUAGES
+    TONE_INSTRUCTIONS, OUTPUT_LANGUAGES, critique_output
 )
 import streamlit as st
 from PyPDF2 import PdfReader
@@ -82,9 +83,27 @@ if uploaded_file is not None:
                 st.stop()
 
             save_generation("pdf", uploaded_file.name, summary)
-        st.subheader("📋 AI Summary")
 
-        st.write(summary)
+        st.session_state["pdf_summary"] = summary
+
+    if "pdf_summary" in st.session_state:
+
+        st.subheader("📋 AI Summary")
+        st.write(st.session_state["pdf_summary"])
+
+        if st.button("🔍 Critique This Summary", key="critique_pdf"):
+            with st.spinner("Reviewing quality..."):
+                try:
+                    critique = critique_output(
+                        text, st.session_state["pdf_summary"],
+                        "Summarized a PDF document"
+                    )
+                except AIEngineError as e:
+                    st.error("Critique failed.")
+                    st.write(e)
+                    st.stop()
+            st.subheader("🔍 Quality Critique")
+            st.write(critique)
 
 # ======================================================
 # MODULE 2 : NEWS ARTICLE READER
@@ -156,9 +175,27 @@ if news_url:
 
                 save_generation("news", news_url, summary)
 
-            st.subheader("📋 AI Summary")
+            st.session_state["news_summary"] = summary
 
-            st.write(summary)
+        if "news_summary" in st.session_state:
+
+            st.subheader("📋 AI Summary")
+            st.write(st.session_state["news_summary"])
+
+            if st.button("🔍 Critique This Summary", key="critique_news"):
+                with st.spinner("Reviewing quality..."):
+                    try:
+                        critique = critique_output(
+                            st.session_state["news_article"],
+                            st.session_state["news_summary"],
+                            "Summarized a news article"
+                        )
+                    except AIEngineError as e:
+                        st.error("Critique failed.")
+                        st.write(e)
+                        st.stop()
+                st.subheader("🔍 Quality Critique")
+                st.write(critique)
 # ======================================================
 # MODULE 3 : YOUTUBE VIDEO SUMMARIZER
 # ======================================================
@@ -229,9 +266,27 @@ if youtube_url:
 
                 save_generation("youtube", youtube_url, summary)
 
-            st.subheader("📋 AI Summary")
+            st.session_state["yt_summary"] = summary
 
-            st.write(summary)
+        if "yt_summary" in st.session_state:
+
+            st.subheader("📋 AI Summary")
+            st.write(st.session_state["yt_summary"])
+
+            if st.button("🔍 Critique This Summary", key="critique_youtube"):
+                with st.spinner("Reviewing quality..."):
+                    try:
+                        critique = critique_output(
+                            st.session_state["yt_transcript"],
+                            st.session_state["yt_summary"],
+                            "Summarized a YouTube video transcript"
+                        )
+                    except AIEngineError as e:
+                        st.error("Critique failed.")
+                        st.write(e)
+                        st.stop()
+                st.subheader("🔍 Quality Critique")
+                st.write(critique)
 # ======================================================
 # MODULE 4 : AI SHORTS GENERATOR
 # ======================================================
@@ -302,6 +357,123 @@ else:
                 script
             )
 
-        st.subheader("📝 Generated Script")
+        st.session_state["shorts_script"] = script
+        st.session_state["shorts_source_text"] = source_text
 
-        st.write(script)
+    if "shorts_script" in st.session_state:
+
+        st.subheader("📝 Generated Script")
+        st.write(st.session_state["shorts_script"])
+
+        if st.button("🔍 Critique This Script", key="critique_shorts"):
+            with st.spinner("Reviewing quality..."):
+                try:
+                    critique = critique_output(
+                        st.session_state["shorts_source_text"],
+                        st.session_state["shorts_script"],
+                        "Generated a short-form video script (Hook/Story/Ending/CTA)"
+                    )
+                except AIEngineError as e:
+                    st.error("Critique failed.")
+                    st.write(e)
+                    st.stop()
+            st.subheader("🔍 Quality Critique")
+            st.write(critique)
+# ======================================================
+# MODULE 5 : AI VOICEOVER
+# ======================================================
+
+st.markdown("---")
+
+st.header("🔊 AI Voiceover Generator")
+
+voiceover_sources = {}
+
+if "news_summary" in st.session_state:
+    voiceover_sources["News Summary"] = st.session_state["news_summary"]
+
+if "yt_summary" in st.session_state:
+    voiceover_sources["YouTube Summary"] = st.session_state["yt_summary"]
+
+if "pdf_summary" in st.session_state:
+    voiceover_sources["PDF Summary"] = st.session_state["pdf_summary"]
+
+if "shorts_script" in st.session_state:
+    voiceover_sources["Shorts Script"] = st.session_state["shorts_script"]
+
+if not voiceover_sources:
+
+    st.info(
+        "No content available yet. Generate a summary or Shorts "
+        "script above first, then come back here to create a "
+        "voiceover from it."
+    )
+
+else:
+
+    selected_vo_label = st.selectbox(
+        "Choose content to convert to voiceover",
+        list(voiceover_sources.keys())
+    )
+
+    editable_text = st.text_area(
+        "Edit the text before generating voiceover (optional)",
+        voiceover_sources[selected_vo_label],
+        height=200,
+        key="vo_editable_text"
+    )
+
+    vo_language = st.selectbox(
+        "Voiceover language",
+        list(VOICE_OPTIONS.keys()),
+        key="lang_voiceover"
+    )
+
+    vo_voice_label = st.selectbox(
+        "Choose a voice",
+        list(VOICE_OPTIONS[vo_language].keys()),
+        key="voice_choice"
+    )
+
+    vo_speed = st.slider(
+        "Speed (%)",
+        min_value=70,
+        max_value=150,
+        value=100,
+        step=10,
+        key="vo_speed"
+    )
+
+    if st.button("🔊 Generate Voiceover"):
+
+        voice_id = VOICE_OPTIONS[vo_language][vo_voice_label]
+
+        with st.spinner("Generating voiceover..."):
+
+            try:
+                audio_path = generate_voiceover(
+                    editable_text, voice_id, vo_speed,
+                    filename="latest_voiceover"
+                )
+            except (ValueError, RuntimeError) as e:
+                st.error("Voiceover generation failed.")
+                st.write(e)
+                st.stop()
+
+            save_generation(
+                "voiceover",
+                f"{selected_vo_label} ({vo_language}, {vo_voice_label}, {vo_speed}%)",
+                str(audio_path)
+            )
+
+        st.success("Voiceover generated!")
+
+        st.audio(str(audio_path))
+
+        with open(audio_path, "rb") as f:
+            st.download_button(
+                "⬇️ Download MP3",
+                f,
+                file_name="voiceover.mp3",
+                mime="audio/mpeg"
+            )
