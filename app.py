@@ -477,3 +477,93 @@ else:
                 file_name="voiceover.mp3",
                 mime="audio/mpeg"
             )
+# ======================================================
+# MODULE 6 : AI THUMBNAIL GENERATOR
+# ======================================================
+
+st.markdown("---")
+
+st.header("🖼️ AI Thumbnail Generator")
+
+thumb_prompt = st.text_area(
+    "Describe your thumbnail idea",
+    placeholder="e.g. Messi scores a goal in the 92nd minute, dramatic stadium lighting",
+    key="thumb_prompt_input"
+)
+
+thumb_style = st.selectbox(
+    "Style",
+    list(STYLE_PRESETS.keys()),
+    key="thumb_style"
+)
+
+thumb_model = st.selectbox(
+    "Image model",
+    IMAGE_MODELS,
+    key="thumb_model"
+)
+
+if thumb_prompt:
+
+    if st.button("✨ Enhance My Prompt"):
+
+        with st.spinner("Expanding your idea into a detailed prompt..."):
+            try:
+                expanded = expand_prompt(thumb_prompt, thumb_style)
+            except AIEngineError as e:
+                st.error("Prompt expansion failed.")
+                st.write(e)
+                st.stop()
+
+        st.session_state["thumb_expanded_prompt"] = expanded
+
+    if "thumb_expanded_prompt" in st.session_state:
+
+        st.subheader("📝 Expanded Prompt")
+
+        final_prompt = st.text_area(
+            "Edit if needed before generating",
+            st.session_state["thumb_expanded_prompt"],
+            height=100,
+            key="thumb_final_prompt"
+        )
+
+        if st.button("🖼️ Generate Thumbnail Variations"):
+
+            with st.spinner("Generating 3 variations..."):
+                try:
+                    image_paths = generate_thumbnail_variations(
+                        final_prompt, model=thumb_model, count=3
+                    )
+                except RuntimeError as e:
+                    st.error("Thumbnail generation failed.")
+                    st.write(e)
+                    st.stop()
+
+                save_generation(
+                    "thumbnail",
+                    thumb_prompt,
+                    f"{len(image_paths)} variations generated"
+                )
+
+            st.session_state["thumb_image_paths"] = image_paths
+
+    if "thumb_image_paths" in st.session_state:
+
+        st.subheader("🖼️ Choose Your Favorite")
+
+        cols = st.columns(len(st.session_state["thumb_image_paths"]))
+
+        for idx, (col, path) in enumerate(
+            zip(cols, st.session_state["thumb_image_paths"])
+        ):
+            with col:
+                st.image(str(path), use_container_width=True)
+                with open(path, "rb") as f:
+                    st.download_button(
+                        f"⬇️ Download #{idx + 1}",
+                        f,
+                        file_name=f"thumbnail_{idx + 1}.png",
+                        mime="image/png",
+                        key=f"download_thumb_{idx}"
+                    )
