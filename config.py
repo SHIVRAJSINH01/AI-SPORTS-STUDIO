@@ -21,3 +21,4 @@ def _clean_env_value(value):
 
 OPENAI_API_KEY = _clean_env_value(os.getenv("OPENAI_API_KEY"))
 GEMINI_API_KEY = _clean_env_value(os.getenv("GEMINI_API_KEY"))
+POLLINATIONS_API_KEY = _clean_env_value(os.getenv("POLLINATIONS_API_KEY"))

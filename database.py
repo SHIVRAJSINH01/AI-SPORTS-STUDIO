@@ -62,3 +62,28 @@ def get_history(limit=20):
     conn.close()
 
     return rows
+
+
+def get_history_by_type(source_type, limit=5):
+    """
+    Retrieves recent history entries filtered to one source type
+    (e.g. 'news', 'pdf', 'youtube').
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id, source_type, input_data, output_data, created_at
+        FROM generations
+        WHERE source_type = ?
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (source_type, limit)
+    )
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows

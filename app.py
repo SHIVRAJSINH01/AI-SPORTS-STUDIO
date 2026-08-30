@@ -1,23 +1,20 @@
+import streamlit as st
+from PyPDF2 import PdfReader
+import requests
+
+from database import init_db, save_generation, get_history_by_type
+from news_reader import extract_news
+from youtube_reader import extract_youtube
+from voiceover import generate_voiceover, VOICE_OPTIONS
+from thumbnail import (
+    expand_prompt, generate_thumbnail_variations,
+    STYLE_PRESETS, IMAGE_MODELS
+)
 from ai_engine import (
     AIEngineError, summarize_text, generate_shorts_script,
     TONE_INSTRUCTIONS, OUTPUT_LANGUAGES, critique_output,
     repurpose_content, PLATFORM_INSTRUCTIONS
 )
-from thumbnail import (
-    expand_prompt, generate_thumbnail_variations,
-    STYLE_PRESETS, IMAGE_MODELS
-)
-from voiceover import generate_voiceover, VOICE_OPTIONS
-from youtube_reader import extract_youtube
-from database import init_db, save_generation
-from news_reader import extract_news
-from ai_engine import (
-    AIEngineError, summarize_text, generate_shorts_script,
-    TONE_INSTRUCTIONS, OUTPUT_LANGUAGES, critique_output
-)
-import streamlit as st
-from PyPDF2 import PdfReader
-import requests
 
 # -------------------------------
 # Page Configuration
@@ -40,6 +37,15 @@ init_db()
 # ======================================================
 
 st.header("📄 PDF Text Extraction")
+
+recent_pdfs = get_history_by_type("pdf", limit=5)
+
+if recent_pdfs:
+    with st.expander(f"🕒 Recent PDFs ({len(recent_pdfs)})"):
+        for entry in recent_pdfs:
+            _, _, input_data, _, created_at = entry
+            st.write(f"📄 {input_data}")
+            st.caption(created_at)
 
 uploaded_file = st.file_uploader(
     "Upload a PDF",
@@ -121,6 +127,15 @@ if uploaded_file is not None:
 st.markdown("---")
 
 st.header("📰 News Article AI Summarizer")
+
+recent_news = get_history_by_type("news", limit=5)
+
+if recent_news:
+    with st.expander(f"🕒 Recent Articles ({len(recent_news)})"):
+        for entry in recent_news:
+            _, _, input_data, _, created_at = entry
+            st.write(f"🔗 {input_data}")
+            st.caption(created_at)
 
 news_url = st.text_input("Paste News Article URL")
 
@@ -212,6 +227,15 @@ if news_url:
 st.markdown("---")
 
 st.header("🎬 YouTube Video Summarizer")
+
+recent_youtube = get_history_by_type("youtube", limit=5)
+
+if recent_youtube:
+    with st.expander(f"🕒 Recent Videos ({len(recent_youtube)})"):
+        for entry in recent_youtube:
+            _, _, input_data, _, created_at = entry
+            st.write(f"🎬 {input_data}")
+            st.caption(created_at)
 
 youtube_url = st.text_input("Paste YouTube Video URL")
 
