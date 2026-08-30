@@ -2,6 +2,7 @@ import streamlit as st
 from PyPDF2 import PdfReader
 import requests
 
+from database import init_db, save_generation, get_history_by_type, get_history
 from database import init_db, save_generation, get_history_by_type
 from news_reader import extract_news
 from youtube_reader import extract_youtube
@@ -673,3 +674,73 @@ else:
 
         st.subheader(f"📱 {repurpose_platform} Version")
         st.write(st.session_state["repurposed_output"])
+# ======================================================
+# MODULE 8 : FULL ACTIVITY HISTORY
+# ======================================================
+
+st.markdown("---")
+
+st.header("📜 Full Activity History")
+
+full_history = get_history(limit=15)
+
+if not full_history:
+
+    st.info("No activity yet. Start using any module above to build your history.")
+
+else:
+
+    full_history = list(reversed(full_history))
+
+    step_labels = {
+        "pdf": "📄 PDF",
+        "news": "📰 News",
+        "youtube": "🎬 YouTube",
+        "shorts_script": "🎥 Shorts",
+        "voiceover": "🔊 Voice",
+        "thumbnail": "🖼️ Thumb",
+        "repurposed_content": "🔁 Post",
+    }
+
+    show_full = st.checkbox("Show full history (all steps)", key="show_full_history")
+
+    visible_history = full_history if show_full else full_history[-5:]
+
+    hidden_count = len(full_history) - len(visible_history)
+
+    if hidden_count > 0:
+        st.caption(f"Showing last {len(visible_history)} of {len(full_history)} steps.")
+
+    # --- Visual diagram (HTML boxes + arrows) ---
+    box_parts = []
+    for i, entry in enumerate(visible_history):
+        source_type = entry[1]
+        label = step_labels.get(source_type, source_type)
+
+        box_parts.append(
+            f'<div style="display:inline-block; padding:10px 16px; margin:4px; '
+            f'border-radius:8px; background-color:#2b313e; color:white; '
+            f'font-size:14px; text-align:center; border:1px solid #444;">'
+            f'{i+1}. {label}</div>'
+        )
+
+    arrow = '<span style="font-size:20px; color:#888; margin:0 4px;">→</span>'
+    diagram_html = arrow.join(box_parts)
+
+    st.markdown(
+        f'<div style="display:flex; flex-wrap:wrap; align-items:center;">{diagram_html}</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown("---")
+
+    # --- Expandable detail per step ---
+    for i, entry in enumerate(visible_history):
+        _, source_type, input_data, output_data, created_at = entry
+
+        label = step_labels.get(source_type, source_type)
+
+        with st.expander(f"{i+1}. {label} — {created_at}"):
+            st.write(f"**Source/Input:** {input_data}")
+            st.write("**Output:**")
+            st.write(output_data)
