@@ -205,3 +205,59 @@ with a one-sentence reason.
 """
 
     return _generate_with_fallback(prompt)
+PLATFORM_INSTRUCTIONS = {
+    "LinkedIn Post": (
+        "Write a professional LinkedIn post. Use short paragraphs, "
+        "a strong opening line that hooks a professional audience, "
+        "and end with a thoughtful question or call-to-action to "
+        "drive engagement. Keep it under 200 words. Do not use "
+        "excessive hashtags — at most 3 relevant ones at the end."
+    ),
+    "Twitter/X Thread": (
+        "Write a Twitter/X thread. Break the content into a numbered "
+        "sequence of short tweets (each under 280 characters). Start "
+        "with a strong hook tweet. Number each tweet like '1/', '2/', "
+        "etc. Keep the tone punchy and conversational."
+    ),
+    "Instagram Caption": (
+        "Write an engaging Instagram caption. Start with a scroll-"
+        "stopping first line, use casual and relatable language, "
+        "include relevant emojis sparingly, and end with 5-8 relevant "
+        "hashtags on a new line."
+    ),
+    "Facebook Post": (
+        "Write a friendly, conversational Facebook post. Slightly "
+        "longer and more casual than LinkedIn, storytelling tone, "
+        "encourage comments and shares."
+    ),
+}
+
+
+def repurpose_content(text, platform, output_language="English"):
+
+    if not text.strip():
+        return "No text found."
+
+    platform_instruction = PLATFORM_INSTRUCTIONS.get(
+        platform, PLATFORM_INSTRUCTIONS["LinkedIn Post"]
+    )
+
+    language_instruction = _language_instruction(output_language, style="Write")
+
+    prompt = f"""
+You are an expert social media content strategist.
+
+{platform_instruction}
+
+{language_instruction}
+
+Base the content on the following source material. Extract the
+most interesting or valuable point(s) to build the post around —
+don't just summarize everything.
+
+Source content:
+
+{text}
+"""
+
+    return _generate_with_fallback(prompt)

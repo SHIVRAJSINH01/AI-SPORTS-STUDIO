@@ -1,3 +1,12 @@
+from ai_engine import (
+    AIEngineError, summarize_text, generate_shorts_script,
+    TONE_INSTRUCTIONS, OUTPUT_LANGUAGES, critique_output,
+    repurpose_content, PLATFORM_INSTRUCTIONS
+)
+from thumbnail import (
+    expand_prompt, generate_thumbnail_variations,
+    STYLE_PRESETS, IMAGE_MODELS
+)
 from voiceover import generate_voiceover, VOICE_OPTIONS
 from youtube_reader import extract_youtube
 from database import init_db, save_generation
@@ -567,3 +576,76 @@ if thumb_prompt:
                         mime="image/png",
                         key=f"download_thumb_{idx}"
                     )
+# ======================================================
+# MODULE 7 : CONTENT REPURPOSING
+# ======================================================
+
+st.markdown("---")
+
+st.header("🔁 Content Repurposing")
+
+repurpose_sources = {}
+
+if "news_summary" in st.session_state:
+    repurpose_sources["News Summary"] = st.session_state["news_summary"]
+
+if "yt_summary" in st.session_state:
+    repurpose_sources["YouTube Summary"] = st.session_state["yt_summary"]
+
+if "pdf_summary" in st.session_state:
+    repurpose_sources["PDF Summary"] = st.session_state["pdf_summary"]
+
+if not repurpose_sources:
+
+    st.info(
+        "No content available yet. Generate a summary above first, "
+        "then come back here to repurpose it for social media."
+    )
+
+else:
+
+    repurpose_source_label = st.selectbox(
+        "Choose content to repurpose",
+        list(repurpose_sources.keys()),
+        key="repurpose_source"
+    )
+
+    repurpose_platform = st.selectbox(
+        "Target platform",
+        list(PLATFORM_INSTRUCTIONS.keys()),
+        key="repurpose_platform"
+    )
+
+    repurpose_language = st.selectbox(
+        "Output language",
+        OUTPUT_LANGUAGES,
+        key="lang_repurpose"
+    )
+
+    if st.button("🔁 Repurpose Content"):
+
+        source_text = repurpose_sources[repurpose_source_label]
+
+        with st.spinner(f"Writing for {repurpose_platform}..."):
+
+            try:
+                repurposed = repurpose_content(
+                    source_text, repurpose_platform, repurpose_language
+                )
+            except AIEngineError as e:
+                st.error("Repurposing failed.")
+                st.write(e)
+                st.stop()
+
+            save_generation(
+                "repurposed_content",
+                f"{repurpose_source_label} → {repurpose_platform}",
+                repurposed
+            )
+
+        st.session_state["repurposed_output"] = repurposed
+
+    if "repurposed_output" in st.session_state:
+
+        st.subheader(f"📱 {repurpose_platform} Version")
+        st.write(st.session_state["repurposed_output"])
