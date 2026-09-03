@@ -10,8 +10,9 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 MAX_RETRIES_PER_MODEL = 2
 RETRY_DELAY_SECONDS = 5
 
+
 FALLBACK_MODELS = [
-    "gemini-flash-lite-latest",
+    "gemini-flash-lite-latest"
     "gemini-2.5-flash-lite",
     "gemini-flash-latest",
 ]
@@ -258,6 +259,83 @@ don't just summarize everything.
 Source content:
 
 {text}
+"""
+
+    return _generate_with_fallback(prompt)
+def combine_and_summarize(sources_dict, output_language="English"):
+    """
+    Synthesizes multiple labeled sources into one combined summary,
+    highlighting agreements, unique points, and contradictions.
+
+    sources_dict: {"Label": "text content", ...}
+    """
+
+    if len(sources_dict) < 2:
+        return "Please select at least 2 sources to combine."
+
+    language_instruction = _language_instruction(output_language)
+
+    sources_block = "\n\n".join(
+        f"--- SOURCE: {label} ---\n{text}"
+        for label, text in sources_dict.items()
+    )
+
+    prompt = f"""
+You are an expert research analyst synthesizing multiple sources.
+
+{language_instruction}
+
+You have been given {len(sources_dict)} separate sources below. Analyze
+them together and produce a structured response with these sections:
+
+COMBINED SUMMARY: A unified summary synthesizing the key information
+across all sources.
+
+AGREEMENTS: Points that multiple sources confirm or agree on.
+
+UNIQUE ADDITIONS: For each source, note anything it mentions that the
+other source(s) do not.
+
+CONTRADICTIONS: Any place where sources disagree or present
+conflicting information. If none exist, state "No contradictions
+found."
+
+Sources:
+
+{sources_block}
+"""
+
+    return _generate_with_fallback(prompt)
+
+def continue_advisor_chat(original_text, task_description, chat_history):
+    """
+    Continues a conversational advisory session about a piece of
+    generated content. chat_history is a list of dicts:
+    [{"role": "user"/"assistant", "content": "..."}]
+    """
+
+    history_text = "\n\n".join(
+        f"{'User' if msg['role'] == 'user' else 'Advisor'}: {msg['content']}"
+        for msg in chat_history
+    )
+
+    prompt = f"""
+You are a helpful, honest content advisor having an ongoing
+conversation with a creator about a piece of content they made.
+
+Task that was performed:
+{task_description}
+
+Original source/content being discussed:
+{original_text[:2000]}
+
+Conversation so far:
+{history_text}
+
+Continue the conversation naturally, responding to the user's most
+recent message. Be specific and practical — suggest concrete wording,
+additions, or changes when relevant. Keep responses focused and not
+overly long.
 """
 
     return _generate_with_fallback(prompt)

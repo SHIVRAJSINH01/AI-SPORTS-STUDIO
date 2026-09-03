@@ -3,7 +3,6 @@ from PyPDF2 import PdfReader
 import requests
 
 from database import init_db, save_generation, get_history_by_type, get_history
-from database import init_db, save_generation, get_history_by_type
 from news_reader import extract_news
 from youtube_reader import extract_youtube
 from voiceover import generate_voiceover, VOICE_OPTIONS
@@ -14,7 +13,8 @@ from thumbnail import (
 from ai_engine import (
     AIEngineError, summarize_text, generate_shorts_script,
     TONE_INSTRUCTIONS, OUTPUT_LANGUAGES, critique_output,
-    repurpose_content, PLATFORM_INSTRUCTIONS
+    continue_advisor_chat, repurpose_content, PLATFORM_INSTRUCTIONS,
+    combine_and_summarize
 )
 
 # -------------------------------
@@ -33,6 +33,67 @@ st.title("🤖 AI Creator Hub")
 st.markdown("---")
 
 init_db()
+
+
+def render_advisor_chat(chat_key, original_text, generated_output, task_description):
+    """
+    Renders a full conversational advisor: a button that starts the
+    conversation with a critique report as the opening message, then
+    an ongoing chat interface for further discussion.
+    """
+
+    if chat_key not in st.session_state:
+
+        if st.button("💬 Discuss & Improve", key=f"start_{chat_key}"):
+            with st.spinner("Generating initial review..."):
+                try:
+                    initial_critique = critique_output(
+                        original_text, generated_output, task_description
+                    )
+                except AIEngineError as e:
+                    st.error("Failed to start conversation.")
+                    st.write(e)
+                    st.stop()
+
+            st.session_state[chat_key] = [
+                {"role": "assistant", "content": initial_critique}
+            ]
+            st.rerun()
+
+    if chat_key in st.session_state:
+
+        st.subheader("💬 Content Advisor")
+
+        for msg in st.session_state[chat_key]:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+
+        user_input = st.chat_input(
+            "Ask how to improve this...", key=f"input_{chat_key}"
+        )
+
+        if user_input:
+
+            st.session_state[chat_key].append(
+                {"role": "user", "content": user_input}
+            )
+
+            with st.spinner("Thinking..."):
+                try:
+                    reply = continue_advisor_chat(
+                        original_text, task_description,
+                        st.session_state[chat_key]
+                    )
+                except AIEngineError as e:
+                    reply = f"Sorry, something went wrong: {e}"
+
+            st.session_state[chat_key].append(
+                {"role": "assistant", "content": reply}
+            )
+
+            st.rerun()
+
+
 # ======================================================
 # MODULE 1 : PDF TEXT EXTRACTION
 # ======================================================
@@ -45,7 +106,7 @@ if recent_pdfs:
     with st.expander(f"🕒 Recent PDFs ({len(recent_pdfs)})"):
         for entry in recent_pdfs:
             _, _, input_data, _, created_at = entry
-            st.write(f"📄 {input_data}")
+            st.code(input_data, language=None)
             st.caption(created_at)
 
 uploaded_file = st.file_uploader(
@@ -107,19 +168,12 @@ if uploaded_file is not None:
         st.subheader("📋 AI Summary")
         st.write(st.session_state["pdf_summary"])
 
-        if st.button("🔍 Critique This Summary", key="critique_pdf"):
-            with st.spinner("Reviewing quality..."):
-                try:
-                    critique = critique_output(
-                        text, st.session_state["pdf_summary"],
-                        "Summarized a PDF document"
-                    )
-                except AIEngineError as e:
-                    st.error("Critique failed.")
-                    st.write(e)
-                    st.stop()
-            st.subheader("🔍 Quality Critique")
-            st.write(critique)
+        render_advisor_chat(
+            "pdf_advisor_chat",
+            text,
+            st.session_state["pdf_summary"],
+            "Summarized a PDF document"
+        )
 
 # ======================================================
 # MODULE 2 : NEWS ARTICLE READER
@@ -133,12 +187,21 @@ recent_news = get_history_by_type("news", limit=5)
 
 if recent_news:
     with st.expander(f"🕒 Recent Articles ({len(recent_news)})"):
-        for entry in recent_news:
+        for idx, entry in enumerate(recent_news):
             _, _, input_data, _, created_at = entry
-            st.write(f"🔗 {input_data}")
-            st.caption(created_at)
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.code(input_data, language=None)
+                st.caption(created_at)
+            with col2:
+                if st.button("🔁 Use", key=f"reuse_news_{idx}"):
+                    st.session_state["news_url_input"] = input_data
+                    st.rerun()
 
-news_url = st.text_input("Paste News Article URL")
+news_url = st.text_input(
+    "Paste News Article URL",
+    key="news_url_input"
+)
 
 if news_url:
 
@@ -207,20 +270,12 @@ if news_url:
             st.subheader("📋 AI Summary")
             st.write(st.session_state["news_summary"])
 
-            if st.button("🔍 Critique This Summary", key="critique_news"):
-                with st.spinner("Reviewing quality..."):
-                    try:
-                        critique = critique_output(
-                            st.session_state["news_article"],
-                            st.session_state["news_summary"],
-                            "Summarized a news article"
-                        )
-                    except AIEngineError as e:
-                        st.error("Critique failed.")
-                        st.write(e)
-                        st.stop()
-                st.subheader("🔍 Quality Critique")
-                st.write(critique)
+            render_advisor_chat(
+                "news_advisor_chat",
+                st.session_state["news_article"],
+                st.session_state["news_summary"],
+                "Summarized a news article"
+            )
 # ======================================================
 # MODULE 3 : YOUTUBE VIDEO SUMMARIZER
 # ======================================================
@@ -233,12 +288,21 @@ recent_youtube = get_history_by_type("youtube", limit=5)
 
 if recent_youtube:
     with st.expander(f"🕒 Recent Videos ({len(recent_youtube)})"):
-        for entry in recent_youtube:
+        for idx, entry in enumerate(recent_youtube):
             _, _, input_data, _, created_at = entry
-            st.write(f"🎬 {input_data}")
-            st.caption(created_at)
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.code(input_data, language=None)
+                st.caption(created_at)
+            with col2:
+                if st.button("🔁 Use", key=f"reuse_yt_{idx}"):
+                    st.session_state["yt_url_input"] = input_data
+                    st.rerun()
 
-youtube_url = st.text_input("Paste YouTube Video URL")
+youtube_url = st.text_input(
+    "Paste YouTube Video URL",
+    key="yt_url_input"
+)
 
 if youtube_url:
 
@@ -307,20 +371,12 @@ if youtube_url:
             st.subheader("📋 AI Summary")
             st.write(st.session_state["yt_summary"])
 
-            if st.button("🔍 Critique This Summary", key="critique_youtube"):
-                with st.spinner("Reviewing quality..."):
-                    try:
-                        critique = critique_output(
-                            st.session_state["yt_transcript"],
-                            st.session_state["yt_summary"],
-                            "Summarized a YouTube video transcript"
-                        )
-                    except AIEngineError as e:
-                        st.error("Critique failed.")
-                        st.write(e)
-                        st.stop()
-                st.subheader("🔍 Quality Critique")
-                st.write(critique)
+            render_advisor_chat(
+                "youtube_advisor_chat",
+                st.session_state["yt_transcript"],
+                st.session_state["yt_summary"],
+                "Summarized a YouTube video transcript"
+            )
 # ======================================================
 # MODULE 4 : AI SHORTS GENERATOR
 # ======================================================
@@ -399,20 +455,12 @@ else:
         st.subheader("📝 Generated Script")
         st.write(st.session_state["shorts_script"])
 
-        if st.button("🔍 Critique This Script", key="critique_shorts"):
-            with st.spinner("Reviewing quality..."):
-                try:
-                    critique = critique_output(
-                        st.session_state["shorts_source_text"],
-                        st.session_state["shorts_script"],
-                        "Generated a short-form video script (Hook/Story/Ending/CTA)"
-                    )
-                except AIEngineError as e:
-                    st.error("Critique failed.")
-                    st.write(e)
-                    st.stop()
-            st.subheader("🔍 Quality Critique")
-            st.write(critique)
+        render_advisor_chat(
+            "shorts_advisor_chat",
+            st.session_state["shorts_source_text"],
+            st.session_state["shorts_script"],
+            "Generated a short-form video script (Hook/Story/Ending/CTA)"
+        )
 # ======================================================
 # MODULE 5 : AI VOICEOVER
 # ======================================================
@@ -700,6 +748,7 @@ else:
         "voiceover": "🔊 Voice",
         "thumbnail": "🖼️ Thumb",
         "repurposed_content": "🔁 Post",
+        "combined_summary": "🧩 Combined",
     }
 
     show_full = st.checkbox("Show full history (all steps)", key="show_full_history")
@@ -711,7 +760,6 @@ else:
     if hidden_count > 0:
         st.caption(f"Showing last {len(visible_history)} of {len(full_history)} steps.")
 
-    # --- Visual diagram (HTML boxes + arrows) ---
     box_parts = []
     for i, entry in enumerate(visible_history):
         source_type = entry[1]
@@ -734,7 +782,6 @@ else:
 
     st.markdown("---")
 
-    # --- Expandable detail per step ---
     for i, entry in enumerate(visible_history):
         _, source_type, input_data, output_data, created_at = entry
 
@@ -744,3 +791,76 @@ else:
             st.write(f"**Source/Input:** {input_data}")
             st.write("**Output:**")
             st.write(output_data)
+# ======================================================
+# MODULE 9 : MULTI-SOURCE COMBINED SUMMARY
+# ======================================================
+
+st.markdown("---")
+
+st.header("🧩 Multi-Source Combined Summary")
+
+combine_sources = {}
+
+if "news_article" in st.session_state:
+    combine_sources["News Article"] = st.session_state["news_article"]
+
+if "yt_transcript" in st.session_state:
+    combine_sources["YouTube Transcript"] = st.session_state["yt_transcript"]
+
+if "pdf_text" in st.session_state:
+    combine_sources["PDF Content"] = st.session_state["pdf_text"]
+
+if len(combine_sources) < 2:
+
+    st.info(
+        "Fetch at least 2 sources above (any combination of PDF, "
+        "News, or YouTube) to combine them into one summary."
+    )
+
+else:
+
+    selected_labels = st.multiselect(
+        "Choose 2 or more sources to combine",
+        list(combine_sources.keys()),
+        default=list(combine_sources.keys())
+    )
+
+    combine_language = st.selectbox(
+        "Output language",
+        OUTPUT_LANGUAGES,
+        key="lang_combine"
+    )
+
+    if len(selected_labels) >= 2:
+
+        if st.button("🧩 Combine & Summarize"):
+
+            chosen = {
+                label: combine_sources[label] for label in selected_labels
+            }
+
+            with st.spinner("Synthesizing sources..."):
+
+                try:
+                    combined = combine_and_summarize(chosen, combine_language)
+                except AIEngineError as e:
+                    st.error("Combination failed.")
+                    st.write(e)
+                    st.stop()
+
+                save_generation(
+                    "combined_summary",
+                    " + ".join(selected_labels),
+                    combined
+                )
+
+            st.session_state["combined_summary"] = combined
+
+    elif selected_labels:
+
+        st.warning("Select at least 2 sources to combine.")
+
+    if "combined_summary" in st.session_state:
+
+        st.subheader("🧩 Combined Summary")
+        st.write(st.session_state["combined_summary"])
